@@ -13,6 +13,8 @@ let globalSearchEnterKeyHandler = null;
 let spinnerTimeout = null;
 const activeViewOptionsSet = new Set(['view-grid', 'view-count', 'expand-collapse']);
 let currentSelectedTheme = 'light';
+let jsonToXmlConversionUrl = '';
+let xmlToJsonConversionUrl = '';
 
 const orientations = ["LeftToRight", "TopToBottom", "RightToLeft", "BottomToTop"];
 
@@ -54,6 +56,10 @@ function initializeSpinner() {
 
 // Initialize the application
 function initializeJsonXmlVisualizer() {
+    const apiEndpoints = document.getElementById('api-endpoints');
+    jsonToXmlConversionUrl = apiEndpoints.getAttribute('data-json-to-xml-url');
+    xmlToJsonConversionUrl = apiEndpoints.getAttribute('data-xml-to-json-url');
+
     getDiagramInstance();
     initializeMonacoEditor();
     initializeResizer();
@@ -92,7 +98,7 @@ function initializeMonacoEditor() {
 
 // Load sample data
 function loadSampleData() {
-    fetch('/assets/sample.json')
+    fetch('./assets/sample.json')
         .then(response => response.json())
         .then(data => {
             if (monacoEditor) {
@@ -141,6 +147,8 @@ async function handleEditorContentChange() {
         updateEditorStatus(false);
         showSpinner();
     }
+    isGraphCollapsed = false;
+    updateCollapseMenuText();
 }
 
 // Load diagram with nodes and connectors
@@ -189,6 +197,8 @@ function handleEditorTypeChange(args) {
                 updateEditorStatus(false);
             });
     }
+    isGraphCollapsed = false;
+    updateCollapseMenuText();
 }
 
 // Server-side conversion function
@@ -198,10 +208,10 @@ async function convertContentOnServer(content, targetType) {
 
         if (targetType === "XML" && content.trim().startsWith('{')) {
             // Convert JSON to XML
-            endpoint = '/Home/ConvertJsonToXml';
+            endpoint = jsonToXmlConversionUrl;
         } else if (targetType === "JSON" && content.trim().startsWith('<')) {
             // Convert XML to JSON
-            endpoint = '/Home/ConvertXmlToJson';
+            endpoint = xmlToJsonConversionUrl;
         } else {
             // No conversion needed
             return content;
@@ -235,7 +245,7 @@ async function processEditorContentForDiagram(editorContent) {
 
         if (currentEditorInputType.toLowerCase() === "xml") {
             // Convert XML to JSON using server-side conversion 
-            const response = await fetch('/Home/ConvertXmlToJson', {
+            const response = await fetch(xmlToJsonConversionUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -346,6 +356,22 @@ function handleFileMenuClick(args) {
     }
 }
 
+function handleExpandStateChange (args) {
+    const node = args.element;
+
+    if (!node || typeof node !== 'object') {
+        return;
+    }
+
+    // Check if it's a root node (no incoming edges)
+    const isRootNode = !node.inEdges || node.inEdges.length === 0;
+
+    if (isRootNode) {
+        isGraphCollapsed = !node.isExpanded;
+        updateCollapseMenuText();
+    }
+};
+
 function handleViewMenuClick(args) {
     // Get the dropdown button instance
     const viewMenuButton = document.getElementById('viewMenuButton').ej2_instances[0];
@@ -364,14 +390,15 @@ function handleViewMenuClick(args) {
             break;
         case 'view-count':
             showChildItemsCount = !showChildItemsCount;
+            jsonXmlDiagram.fitToPage({ mode: "Page", region: "Content", canZoomIn: true });
             jsonXmlDiagram.refresh();
             break;
         case 'expand-collapse':
             showExpandCollapseIcon = !showExpandCollapseIcon;
             jsonXmlDiagram.refresh();
+            jsonXmlDiagram.fitToPage({ mode: "Page", region: "Content", canZoomIn: true });
             break;
     }
-    jsonXmlDiagram.fitToPage({ mode: "Page", region: "Content", canZoomIn: true });
 }
 
 function handleThemeMenuClick(args) {
